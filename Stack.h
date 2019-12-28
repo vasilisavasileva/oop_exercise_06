@@ -60,6 +60,8 @@ namespace containers {
 		};
 
 		using unique_ptr = std::unique_ptr<element, deleter>;
+		unique_ptr push_impl(unique_ptr  cur, const T& value);
+		unique_ptr pop_impl(unique_ptr cur);
 
 		struct element {
 			T value;
@@ -90,31 +92,44 @@ namespace containers {
 		return size;
 	}
 
+
 	template<class T, class Allocator>
-	void stack<T, Allocator>::push(const T& value) {
+	void stack<T,  Allocator>::push(const T& value) {
+		first = push_impl(std::move(first), value);
 		size++;
-		element* result = this->allocator_.allocate(1);
-		std::allocator_traits<allocator_type>::construct(this->allocator_, result, value);
-		unique_ptr tmp = std::move(first);
-		first = unique_ptr(result, deleter{ &this->allocator_ });
-		first->next_element = std::move(tmp);
 	}
 
+	template<class T, class Allocator>
+	typename stack<T, Allocator>::unique_ptr stack<T, Allocator>::push_impl(unique_ptr cur, const T& value) {
+
+		if (cur != nullptr) {
+			cur->next_element = push_impl(std::move(cur->next_element), value);
+			return cur;
+		}		
+		element* result = this->allocator_.allocate(1);
+		std::allocator_traits<allocator_type>::construct(this->allocator_, result, value);
+		return unique_ptr(result, deleter{&this->allocator_});
+	}
+	
 
 	template<class T, class Allocator>
 	void stack<T, Allocator>::pop() {
 		if (size == 0) {
 			throw std::logic_error("stack is empty");
 		}
-		if (size == 1) {
-			first = nullptr;
-			size--;
-			return;
-		}
-		first = std::move(first->next_element);
+		first = pop_impl(std::move(first));
 		size--;
 	}
 
+
+	template<class T, class Allocator>
+	typename stack<T, Allocator>::unique_ptr stack<T, Allocator>::pop_impl(unique_ptr cur) {
+		if (cur->next_element != nullptr) {
+			cur->next_element = pop_impl(std::move(cur->next_element));
+			return cur;
+		}
+		return unique_ptr(nullptr, deleter{ &this->allocator_ });//?
+	}
 
 	template<class T, class Allocator>
 	T& stack<T, Allocator>::top() {
@@ -139,15 +154,19 @@ namespace containers {
 		first = std::move(other.first);
 	}
 
-
 	template<class T, class Allocator>
 	void stack<T, Allocator>::delete_by_it(containers::stack<T, Allocator>::forward_iterator d_it) {
 		forward_iterator i = this->begin(), end = this->end();
 		if (d_it == end) {
-			throw std::logic_error("out of stack");
+			throw std::logic_error("out of borders");
 		}
 		if (d_it == this->begin()) {
-			this->pop();
+//			unique_ptr tmp;
+			//element* result = this->allocator_.allocate(1);
+			//std::allocator_traits<allocator_type>::construct(this->allocator_, result, value);
+			//return unique_ptr(result, deleter{ &this->allocator_ });
+			auto tmp = std::move(first->next_element);
+			first = std::move(tmp);
 			return;
 		}
 		while ((i.it_ptr != nullptr) && (i.it_ptr->next() != d_it)) {
@@ -161,8 +180,7 @@ namespace containers {
 	template<class T, class Allocator>
 	void stack<T, Allocator>::delete_by_index(size_t N) {
 		forward_iterator it = this->begin();
-		for (size_t i = 1; i <= N; ++i) {
-			if (i == N) break;
+		for (size_t i = 0; i < N; ++i) {
 			++it;
 		}
 		this->delete_by_it(it);
@@ -170,11 +188,12 @@ namespace containers {
 
 	template<class T, class Allocator>
 	void stack<T, Allocator>::insert_by_it(containers::stack<T, Allocator>::forward_iterator ins_it, T& value) {
-		auto tmp = std::unique_ptr<element>(new element{ value });
+		element* tmp = this->allocator_.allocate(1);
+		std::allocator_traits<allocator_type>::construct(this->allocator_, tmp, value);
 		forward_iterator i = this->begin();
 		if (ins_it == this->begin()) {
 			tmp->next_element = std::move(first);
-			first = std::move(tmp);
+			first = unique_ptr(tmp, deleter{ &this->allocator_ });
 			size++;
 			return;
 		}
@@ -183,7 +202,7 @@ namespace containers {
 		}
 		if (i.it_ptr == nullptr) throw std::logic_error("out of borders");
 		tmp->next_element = std::move(i.it_ptr->next_element);
-		i.it_ptr->next_element = std::move(tmp);
+		i.it_ptr->next_element = unique_ptr(tmp, deleter{ &this->allocator_ });
 		size++;
 	}
 
