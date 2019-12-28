@@ -186,11 +186,16 @@ namespace containers {
 		this->delete_by_it(it);
 	}
 
+
 	template<class T, class Allocator>
 	void stack<T, Allocator>::insert_by_it(containers::stack<T, Allocator>::forward_iterator ins_it, T& value) {
+		forward_iterator i = this->begin();
+		if (ins_it == this->end()) {
+			this->push(value);
+			return;
+		}
 		element* tmp = this->allocator_.allocate(1);
 		std::allocator_traits<allocator_type>::construct(this->allocator_, tmp, value);
-		forward_iterator i = this->begin();
 		if (ins_it == this->begin()) {
 			tmp->next_element = std::move(first);
 			first = unique_ptr(tmp, deleter{ &this->allocator_ });
@@ -209,10 +214,12 @@ namespace containers {
 	template<class T, class Allocator>
 	void stack<T, Allocator>::insert_by_index(size_t N, T& value) {
 		forward_iterator it = this->begin();
-		for (size_t i = 1; i <= N; ++i) {
-			if (i == N) break;
-			++it;
-		}
+		if (N >= this->length())
+			it = this->end();
+		else
+			for (size_t i = 1; i <= N; ++i) {
+				++it;
+			}
 		this->insert_by_it(it, value);
 	}
 
